@@ -6,87 +6,98 @@ const wss = new WebSocket.Server({ port });
 const gridSize = 20;
 const size = 700;
 
+const skins = [
+  "#00ff00",
+  "#ff0000",
+  "#0000ff",
+  "#ff00ff",
+  "#00ffff",
+  "#ffa500",
+];
+
 let players = {};
 let food = randomFood();
+let directions = {};
 
 function randomFood() {
-    return {
-        x: Math.floor(Math.random() * (size / gridSize)) * gridSize,
-        y: Math.floor(Math.random() * (size / gridSize)) * gridSize
-    };
+  return {
+    x: Math.floor(Math.random() * (size / gridSize)) * gridSize,
+    y: Math.floor(Math.random() * (size / gridSize)) * gridSize
+  };
 }
 
-// directions stored per player
-const directions = {};
-
 wss.on("connection", (ws) => {
-    const id = Date.now().toString();
+  const id = Date.now().toString();
 
-    players[id] = [{ x: 200, y: 200 }];
-    directions[id] = { x: 0, y: 0 };
+  players[id] = {
+    snake: [{ x: 200, y: 200 }],
+    color: skins[Math.floor(Math.random() * skins.length)]
+  };
 
-    ws.send(JSON.stringify({ type: "init", id }));
+  directions[id] = { x: 0, y: 0 };
 
-    ws.on("message", (msg) => {
-        const data = JSON.parse(msg);
+  ws.send(JSON.stringify({ type: "init", id }));
 
-        if (data.type === "dir") {
-            const key = data.key;
+  ws.on("message", (msg) => {
+    const data = JSON.parse(msg);
 
-            if (key === "ArrowUp") directions[id] = { x: 0, y: -gridSize };
-            if (key === "ArrowDown") directions[id] = { x: 0, y: gridSize };
-            if (key === "ArrowLeft") directions[id] = { x: -gridSize, y: 0 };
-            if (key === "ArrowRight") directions[id] = { x: gridSize, y: 0 };
-        }
-    });
+    if (data.type === "dir") {
+      const key = data.key;
 
-    ws.on("close", () => {
-        delete players[id];
-        delete directions[id];
-    });
+      if (key === "ArrowUp") directions[id] = { x: 0, y: -gridSize };
+      if (key === "ArrowDown") directions[id] = { x: 0, y: gridSize };
+      if (key === "ArrowLeft") directions[id] = { x: -gridSize, y: 0 };
+      if (key === "ArrowRight") directions[id] = { x: gridSize, y: 0 };
+    }
+  });
+
+  ws.on("close", () => {
+    delete players[id];
+    delete directions[id];
+  });
 });
 
-// GAME LOOP (THIS FIXES EVERYTHING)
+// GAME LOOP
 setInterval(() => {
-    for (let id in players) {
-        let snake = players[id];
-        let dir = directions[id];
+  for (let id in players) {
+    let player = players[id];
+    let snake = player.snake;
+    let dir = directions[id];
 
-        if (!dir) continue;
+    if (!dir) continue;
 
-        let head = { ...snake[0] };
-        head.x += dir.x;
-        head.y += dir.y;
+    let head = { ...snake[0] };
+    head.x += dir.x;
+    head.y += dir.y;
 
-        // 🟥 WALL COLLISION FIX
-        if (
-            head.x < 0 || head.x >= size ||
-            head.y < 0 || head.y >= size
-        ) {
-            snake.length = 1;
-            snake[0] = { x: 200, y: 200 };
-            directions[id] = { x: 0, y: 0 };
-            continue;
-        }
-
-        snake.unshift(head);
-
-        // food
-        if (head.x === food.x && head.y === food.y) {
-            food = randomFood();
-        } else {
-            snake.pop();
-        }
+    // wall collision
+    if (
+      head.x < 0 || head.x >= size ||
+      head.y < 0 || head.y >= size
+    ) {
+      snake.length = 1;
+      snake[0] = { x: 200, y: 200 };
+      directions[id] = { x: 0, y: 0 };
+      continue;
     }
 
-    const state = JSON.stringify({
-        type: "state",
-        players,
-        food
-    });
+    snake.unshift(head);
 
-    wss.clients.forEach(ws => ws.send(state));
+    if (head.x === food.x && head.y === food.y) {
+      food = randomFood();
+    } else {
+      snake.pop();
+    }
+  }
 
-}, 120);
+  const state = JSON.stringify({
+    type: "state",
+    players,
+    food
+  });
+
+  wss.clients.forEach(ws => ws.send(state));
+
+}, 80);
 
 console.log("Server running on port", port);
