@@ -33,7 +33,7 @@ wss.on("connection", (ws) => {
   players[id] = {
     snake: [{ x: 200, y: 200 }],
     color: skins[Math.floor(Math.random() * skins.length)],
-    name: "Player" + Math.floor(Math.random() * 1000)
+    name: "Player"
   };
 
   directions[id] = { x: 0, y: 0 };
@@ -54,7 +54,7 @@ wss.on("connection", (ws) => {
       if (key === "ArrowRight") directions[id] = { x: gridSize, y: 0 };
     }
 
-    // username
+    // name (FIXED: always overwrite safely)
     if (data.type === "name") {
       if (players[id]) {
         players[id].name = data.name;
