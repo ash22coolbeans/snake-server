@@ -1,69 +1,92 @@
 const WebSocket = require("ws");
 
-const port = process.env.PORT || 8080; // <-- REQUIRED FOR RAILWAY
+const port = process.env.PORT || 8080;
 const wss = new WebSocket.Server({ port });
 
-const box = 20;
+const gridSize = 20;
+const size = 700;
+
 let players = {};
 let food = randomFood();
 
 function randomFood() {
     return {
-        x: Math.floor(Math.random() * 20) * box,
-        y: Math.floor(Math.random() * 20) * box
+        x: Math.floor(Math.random() * (size / gridSize)) * gridSize,
+        y: Math.floor(Math.random() * (size / gridSize)) * gridSize
     };
 }
 
-wss.on("connection", ws => {
+// directions stored per player
+const directions = {};
+
+wss.on("connection", (ws) => {
     const id = Date.now().toString();
 
-    players[id] = [{
-        x: 200,
-        y: 200
-    }];
+    players[id] = [{ x: 200, y: 200 }];
+    directions[id] = { x: 0, y: 0 };
 
     ws.send(JSON.stringify({ type: "init", id }));
 
-    ws.on("message", msg => {
+    ws.on("message", (msg) => {
         const data = JSON.parse(msg);
 
         if (data.type === "dir") {
-            const snake = players[id];
-            if (!snake) return;
+            const key = data.key;
 
-            let head = { ...snake[0] };
-
-            if (data.key === "ArrowUp") head.y -= box;
-            if (data.key === "ArrowDown") head.y += box;
-            if (data.key === "ArrowLeft") head.x -= box;
-            if (data.key === "ArrowRight") head.x += box;
-
-            snake.unshift(head);
-
-            // food
-            if (head.x === food.x && head.y === food.y) {
-                food = randomFood();
-            } else {
-                snake.pop();
-            }
+            if (key === "ArrowUp") directions[id] = { x: 0, y: -gridSize };
+            if (key === "ArrowDown") directions[id] = { x: 0, y: gridSize };
+            if (key === "ArrowLeft") directions[id] = { x: -gridSize, y: 0 };
+            if (key === "ArrowRight") directions[id] = { x: gridSize, y: 0 };
         }
     });
 
     ws.on("close", () => {
         delete players[id];
+        delete directions[id];
     });
 });
 
-// broadcast loop
+// GAME LOOP (THIS FIXES EVERYTHING)
 setInterval(() => {
-    const state = {
+    for (let id in players) {
+        let snake = players[id];
+        let dir = directions[id];
+
+        if (!dir) continue;
+
+        let head = { ...snake[0] };
+        head.x += dir.x;
+        head.y += dir.y;
+
+        // 🟥 WALL COLLISION FIX
+        if (
+            head.x < 0 || head.x >= size ||
+            head.y < 0 || head.y >= size
+        ) {
+            snake.length = 1;
+            snake[0] = { x: 200, y: 200 };
+            directions[id] = { x: 0, y: 0 };
+            continue;
+        }
+
+        snake.unshift(head);
+
+        // food
+        if (head.x === food.x && head.y === food.y) {
+            food = randomFood();
+        } else {
+            snake.pop();
+        }
+    }
+
+    const state = JSON.stringify({
         type: "state",
         players,
         food
-    };
+    });
 
-    const msg = JSON.stringify(state);
-    wss.clients.forEach(ws => ws.send(msg));
+    wss.clients.forEach(ws => ws.send(state));
+
 }, 120);
 
-console.log("WebSocket server running on port " + port);
+console.log("Server running on port", port);
