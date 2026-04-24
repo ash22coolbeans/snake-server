@@ -16,8 +16,9 @@ const skins = [
 ];
 
 let players = {};
-let food = randomFood();
 let directions = {};
+let scores = {};
+let food = randomFood();
 
 function randomFood() {
   return {
@@ -31,16 +32,19 @@ wss.on("connection", (ws) => {
 
   players[id] = {
     snake: [{ x: 200, y: 200 }],
-    color: skins[Math.floor(Math.random() * skins.length)]
+    color: skins[Math.floor(Math.random() * skins.length)],
+    name: "Player" + Math.floor(Math.random() * 1000)
   };
 
   directions[id] = { x: 0, y: 0 };
+  scores[id] = 0;
 
   ws.send(JSON.stringify({ type: "init", id }));
 
   ws.on("message", (msg) => {
     const data = JSON.parse(msg);
 
+    // movement
     if (data.type === "dir") {
       const key = data.key;
 
@@ -49,11 +53,19 @@ wss.on("connection", (ws) => {
       if (key === "ArrowLeft") directions[id] = { x: -gridSize, y: 0 };
       if (key === "ArrowRight") directions[id] = { x: gridSize, y: 0 };
     }
+
+    // username
+    if (data.type === "name") {
+      if (players[id]) {
+        players[id].name = data.name;
+      }
+    }
   });
 
   ws.on("close", () => {
     delete players[id];
     delete directions[id];
+    delete scores[id];
   });
 });
 
@@ -70,7 +82,7 @@ setInterval(() => {
     head.x += dir.x;
     head.y += dir.y;
 
-    // wall collision
+    // WALL COLLISION
     if (
       head.x < 0 || head.x >= size ||
       head.y < 0 || head.y >= size
@@ -78,13 +90,16 @@ setInterval(() => {
       snake.length = 1;
       snake[0] = { x: 200, y: 200 };
       directions[id] = { x: 0, y: 0 };
+      scores[id] = 0;
       continue;
     }
 
     snake.unshift(head);
 
+    // FOOD
     if (head.x === food.x && head.y === food.y) {
       food = randomFood();
+      scores[id] += 1;
     } else {
       snake.pop();
     }
@@ -93,7 +108,8 @@ setInterval(() => {
   const state = JSON.stringify({
     type: "state",
     players,
-    food
+    food,
+    scores
   });
 
   wss.clients.forEach(ws => ws.send(state));
