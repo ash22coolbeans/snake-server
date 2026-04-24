@@ -7,12 +7,8 @@ const gridSize = 20;
 const size = 700;
 
 const skins = [
-  "#00ff00",
-  "#ff0000",
-  "#0000ff",
-  "#ff00ff",
-  "#00ffff",
-  "#ffa500",
+  "#00ff00", "#ff0000", "#0000ff",
+  "#ff00ff", "#00ffff", "#ffa500"
 ];
 
 let players = {};
@@ -30,10 +26,11 @@ function randomFood() {
 wss.on("connection", (ws) => {
   const id = Date.now().toString();
 
+  // IMPORTANT: no default name = prevents overwrite bug
   players[id] = {
     snake: [{ x: 200, y: 200 }],
     color: skins[Math.floor(Math.random() * skins.length)],
-    name: "Player"
+    name: null
   };
 
   directions[id] = { x: 0, y: 0 };
@@ -44,7 +41,12 @@ wss.on("connection", (ws) => {
   ws.on("message", (msg) => {
     const data = JSON.parse(msg);
 
-    // movement
+    if (data.type === "name") {
+      if (players[id]) {
+        players[id].name = data.name;
+      }
+    }
+
     if (data.type === "dir") {
       const key = data.key;
 
@@ -52,13 +54,6 @@ wss.on("connection", (ws) => {
       if (key === "ArrowDown") directions[id] = { x: 0, y: gridSize };
       if (key === "ArrowLeft") directions[id] = { x: -gridSize, y: 0 };
       if (key === "ArrowRight") directions[id] = { x: gridSize, y: 0 };
-    }
-
-    // name (FIXED: always overwrite safely)
-    if (data.type === "name") {
-      if (players[id]) {
-        players[id].name = data.name;
-      }
     }
   });
 
@@ -72,8 +67,8 @@ wss.on("connection", (ws) => {
 // GAME LOOP
 setInterval(() => {
   for (let id in players) {
-    let player = players[id];
-    let snake = player.snake;
+    let p = players[id];
+    let snake = p.snake;
     let dir = directions[id];
 
     if (!dir) continue;
